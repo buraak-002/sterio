@@ -1,0 +1,602 @@
+/* Nimra Birthday Experience
+   - Original canvas engine: stars + fireworks (trails, smoke, twinkles)
+   - 6 scenes (0..5)
+   - Music starts on first tap (Begin), loops forever — even after credits
+   - Scene 3 candle: mic blow detection + instant tap fallback → fireworks celebration
+   - Scene 5: credits roll (NIMRA first ... Directed by Ayaz last)
+     → everything fades → only sky/fireworks/music → quiet line → tiny Replay
+*/
+(() => {
+  'use strict';
+  // --------------------------
+  // Helpers
+  // --------------------------
+  const $ = (sel, root = document) => root.querySelector(sel);
+  const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  function now() {
+    return performance.now();
+  }
+  // --------------------------
+  // Scene navigation
+  // --------------------------
+  const scenes = $$('.scene');
+  let sceneIndex = 0;
+  function setScene(i) {
+    sceneIndex = clamp(i, 0, scenes.length - 1);
+    scenes.forEach(s => s.classList.remove('active'));
+    const active = scenes.find(s => Number(s.dataset.scene) === sceneIndex);
+    if (active) active.classList.add('active');
+    // Fireworks intensity per scene
+    if (sceneIndex === 0) fx.setIntensity(0.05);
+    if (sceneIndex === 1) fx.setIntensity(0.9);
+    if (sceneIndex === 2) fx.setIntensity(0.4);
+    if (sceneIndex === 3) fx.setIntensity(0.35);
+    if (sceneIndex === 4) fx.setIntensity(0.3);
+    if (sceneIndex === 5) fx.setIntensity(0.55);
+    // Scene hooks
+    if (sceneIndex === 1) startMemoriesSequence();
+    if (sceneIndex === 2) startSaturnSequence();
+    if (sceneIndex === 3) enterCandleScene();
+    if (sceneIndex === 5) restartCreditsRoll();
+  }
+  // --------------------------
+  // Audio (unlocks on first tap, loops forever)
+  // --------------------------
+  const bgm = $('#bgm');
+  let audioStarted = false;
+  function startMusic() {
+    if (audioStarted) return;
+    audioStarted = true;
+    try {
+      bgm.volume = 0.25;
+      bgm.loop = true;
+      const p = bgm.play();
+      if (p && typeof p.catch === 'function') {
+        p.catch(() => {
+          audioStarted = false;
+        });
+      }
+    } catch {
+      audioStarted = false;
+    }
+  }
+  // --------------------------
+  // Scene 1 — memories stagger
+  // --------------------------
+  function startMemoriesSequence() {
+    const items = $$('.memory');
+    items.forEach(m => m.classList.remove('show'));
+    const baseDelay = 280;
+    items.forEach((el, idx) => {
+      setTimeout(() => el.classList.add('show'), baseDelay + idx * 850);
+    });
+  }
+  // --------------------------
+  // Scene 2 — saturn quotes stagger
+  // --------------------------
+  function startSaturnSequence() {
+    const cards = $$('.quote-card');
+    cards.forEach(c => c.classList.remove('show'));
+    const baseDelay = 300;
+    cards.forEach((el, idx) => {
+      setTimeout(() => el.classList.add('show'), baseDelay + idx * 800);
+    });
+  }
+  // --------------------------
+  // Scene 3 — candle blow-out logic
+  // --------------------------
+  const continueBtn = $('#continueBtn');
+  const flameEl = $('#flame');
+  const candleEl = $('#candle');
+  let candleOut = false;
+  function setCandleOut(out) {
+    candleOut = out;
+    if (candleOut) {
+      flameEl.classList.add('off');
+      continueBtn.disabled = false;
+    } else {
+      flameEl.classList.remove('off');
+      continueBtn.disabled = true;
+    }
+  }
+  // Mic detection
+  let micRequested = false;
+  let audioCtx = null;
+  let analyser = null;
+  let micStream = null;
+  let micSource = null;
+  let blowScore = 0;
+  let lastMicFrame = 0;
+  async function requestMicOnce() {
+    if (micRequested || candleOut) return;
+    micRequested = true;
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+    try {
+      micStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }
+      });
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 1024;
+      analyser.smoothingTimeConstant = 0.8;
+      micSource = audioCtx.createMediaStreamSource(micStream);
+      micSource.connect(analyser);
+      lastMicFrame = now();
+      blowScore = 0;
+    } catch {
+      analyser = null;
+      audioCtx = null;
+      micStream = null;
+      micSource = null;
+    }
+  }
+  function stopMic() {
+    try {
+      if (micStream) {
+        micStream.getTracks().forEach(t => t.stop());
+      }
+    } catch {}
+    micStream = null;
+    try { micSource && micSource.disconnect(); } catch {}
+    micSource = null;
+    try { analyser && analyser.disconnect(); } catch {}
+    analyser = null;
+    try { audioCtx && audioCtx.close(); } catch {}
+    audioCtx = null;
+  }
+  function sampleMicAndDetectBlow(t) {
+    if (!analyser || candleOut) return;
+    const dt = (t - lastMicFrame) / 1000;
+    lastMicFrame = t;
+    const buf = new Uint8Array(analyser.fftSize);
+    analyser.getByteTimeDomainData(buf);
+    let sum = 0;
+    for (let i = 0; i < buf.length; i++) {
+      const v = (buf[i] - 128) / 128;
+      sum += v * v;
+    }
+    const rms = Math.sqrt(sum / buf.length);
+    const threshold = 0.06;
+    const strong = 0.12;
+    const x = clamp((rms - threshold) / (strong - threshold), 0, 1);
+    const rise = 3.0;
+    const decay = 1.8;
+    blowScore += (x > 0 ? rise * x : -decay) * dt;
+    blowScore = clamp(blowScore, 0, 1.2);
+    if (blowScore >= 1.0) {
+      extinguishCandle('mic');
+    }
+  }
+  function extinguishCandle(reason = 'tap') {
+    if (candleOut) return;
+    setCandleOut(true);
+    stopMic();
+    fx.puffAtCenter();
+    fx.celebrationBurst();
+    fx.setIntensity(0.95);
+    setTimeout(() => {
+      if (sceneIndex === 3) fx.setIntensity(0.35);
+    }, 3200);
+  }
+  function onFlameTap() {
+    extinguishCandle('tap');
+  }
+  function enterCandleScene() {
+    setCandleOut(candleOut);
+    requestMicOnce();
+  }
+  flameEl.addEventListener('click', onFlameTap, { passive: true });
+  candleEl.addEventListener('click', onFlameTap, { passive: true });
+  // --------------------------
+  // Scene 4 — envelope
+  // --------------------------
+  const envelopeBtn = $('#envelope');
+  envelopeBtn.addEventListener('click', (e) => {
+    if (envelopeBtn.classList.contains('open')) {
+      const insideLetter = e.target && e.target.closest && e.target.closest('.letter');
+      if (insideLetter) return;
+    }
+    envelopeBtn.classList.add('open');
+  });
+  // --------------------------
+  // Scene 5 — credits roll + eternal sky finale
+  // --------------------------
+  const creditsRoll = $('#creditsRoll');
+  const creditsWrapper = $('#creditsWrapper');
+  const skyFinale = $('#skyFinale');
+  const replayBtn = $('#replayBtn');
+  function restartCreditsRoll() {
+    creditsWrapper.classList.remove('done');
+    skyFinale.classList.remove('show');
+    replayBtn.classList.remove('show');
+    creditsRoll.classList.remove('roll');
+    void creditsRoll.offsetHeight; // restart animation
+    creditsRoll.classList.add('roll');
+  }
+  creditsRoll.addEventListener('animationend', (e) => {
+    if (e.animationName !== 'scrollCredits') return;
+    // Credits finished → everything leaves the screen
+    creditsWrapper.classList.add('done');
+    // Quiet line appears over the eternal sky
+    setTimeout(() => {
+      skyFinale.classList.add('show');
+    }, 1600);
+    // Quiet line fades away too → only stars/fireworks/music remain
+    // + tiny Replay Sky button appears at the bottom
+    setTimeout(() => {
+      skyFinale.classList.remove('show');
+      replayBtn.classList.add('show');
+    }, 1600 + 7000);
+  });
+  // --------------------------
+  // Buttons
+  // --------------------------
+  $('#startBtn').addEventListener('click', () => {
+    startMusic();
+    setScene(1);
+  });
+  $('#memoriesNextBtn').addEventListener('click', () => {
+    startMusic();
+    setScene(2);
+  });
+  $('#saturnNextBtn').addEventListener('click', () => setScene(3));
+  continueBtn.addEventListener('click', () => {
+    if (!candleOut) return;
+    setScene(4);
+  });
+  $('#creditsBtn').addEventListener('click', () => setScene(5));
+  replayBtn.addEventListener('click', () => {
+    candleOut = false;
+    envelopeBtn.classList.remove('open');
+    setScene(0);
+  });
+  // --------------------------
+  // Gift layer — original floating gifts (unchanged)
+  // --------------------------
+  const giftLayer = $('#giftLayer');
+  function makeGiftEl() {
+    const el = document.createElement('div');
+    el.className = 'gift';
+    const size = Math.random() * 26 + 18;
+    el.style.width = `${size}px`;
+    el.style.height = `${size}px`;
+    el.style.left = `${Math.random() * 100}%`;
+    el.style.top = `${100 + Math.random() * 30}%`;
+    el.style.opacity = `${0.18 + Math.random() * 0.20}`;
+    const dur = 9 + Math.random() * 10;
+    const drift = (Math.random() * 2 - 1) * 18;
+    el.style.setProperty('--dur', `${dur}s`);
+    el.style.setProperty('--drift', `${drift}px`);
+    return el;
+  }
+  function initGiftFallback() {
+    const css = document.createElement('style');
+    css.textContent = `
+      #giftLayer .gift{
+        position:absolute;
+        border-radius: 8px;
+        background:
+          linear-gradient(180deg, rgba(255,255,255,0.28), transparent 45%),
+          linear-gradient(135deg, rgba(255,63,180,0.85), rgba(138,63,252,0.85));
+        border: 1px solid rgba(255,255,255,0.14);
+        box-shadow: 0 18px 50px rgba(0,0,0,0.35);
+        transform: translate(-50%, 0);
+        animation: floatGift var(--dur) linear infinite;
+        filter: blur(0px);
+      }
+      #giftLayer .gift::before{
+        content:"";
+        position:absolute;
+        inset: 0;
+        border-radius: 8px;
+        background:
+          linear-gradient(90deg,
+            transparent 0 42%,
+            rgba(255,255,255,0.22) 42% 58%,
+            transparent 58% 100%);
+        opacity: 0.9;
+      }
+      #giftLayer .gift::after{
+        content:"";
+        position:absolute;
+        left: 50%;
+        top: -8px;
+        transform: translateX(-50%);
+        width: 46%;
+        height: 14px;
+        border-radius: 999px;
+        background: linear-gradient(135deg, rgba(77,124,255,0.75), rgba(255,63,180,0.55));
+        border: 1px solid rgba(255,255,255,0.14);
+        opacity: 0.9;
+      }
+      @keyframes floatGift{
+        0%{ transform: translate(-50%, 0) translateX(0px); }
+        100%{ transform: translate(-50%, -140vh) translateX(var(--drift)); }
+      }
+    `;
+    document.head.appendChild(css);
+    for (let i = 0; i < 14; i++) {
+      giftLayer.appendChild(makeGiftEl());
+    }
+    giftLayer.addEventListener('animationiteration', (e) => {
+      const el = e.target;
+      if (!(el instanceof HTMLElement)) return;
+      if (!el.classList.contains('gift')) return;
+      el.style.left = `${Math.random() * 100}%`;
+      el.style.opacity = `${0.16 + Math.random() * 0.22}`;
+      el.style.setProperty('--drift', `${(Math.random() * 2 - 1) * 18}px`);
+    });
+  }
+  initGiftFallback();
+  // --------------------------
+  // Fireworks + Stars — ORIGINAL engine (unchanged)
+  // --------------------------
+  const canvas = $('#fxCanvas');
+  const ctx = canvas.getContext('2d', { alpha: true });
+  const fx = (() => {
+    let w = 0, h = 0, dpr = 1;
+    let last = now();
+    const stars = [];
+    const STAR_COUNT_BASE = 140;
+    const rockets = [];
+    const particles = [];
+    const smokes = [];
+    let intensity = 0.05;
+    let spawnAcc = 0;
+    const palette = [
+      { r: 170, g: 110, b: 255 },
+      { r: 110, g: 160, b: 255 },
+      { r: 255, g: 110, b: 220 },
+      { r: 235, g: 235, b: 255 },
+    ];
+    function resize() {
+      dpr = Math.max(1, Math.min(2.25, window.devicePixelRatio || 1));
+      w = Math.floor(window.innerWidth * dpr);
+      h = Math.floor(window.innerHeight * dpr);
+      canvas.width = w;
+      canvas.height = h;
+      stars.length = 0;
+      const count = Math.floor(STAR_COUNT_BASE * (w * h) / (900 * 700));
+      for (let i = 0; i < count; i++) {
+        stars.push({
+          x: Math.random() * w,
+          y: Math.random() * h,
+          z: Math.random() * 1,
+          r: (Math.random() * 1.2 + 0.25) * dpr,
+          tw: Math.random() * Math.PI * 2,
+          tws: 0.7 + Math.random() * 1.8,
+          a: 0.15 + Math.random() * 0.55,
+        });
+      }
+    }
+    function setIntensity(v) {
+      intensity = clamp(v, 0, 1);
+    }
+    function launchRocket() {
+      const x = (Math.random() * 0.9 + 0.05) * w;
+      const y = h + 10 * dpr;
+      const z = 0.35 + Math.random() * 0.65;
+      const speed = (6.2 + Math.random() * 2.6) * dpr * (0.85 + 0.35 * (1 - z));
+      const vx = (Math.random() * 2 - 1) * 0.6 * dpr;
+      const vy = -speed;
+      const targetY = (Math.random() * 0.45 + 0.12) * h;
+      const color = palette[(Math.random() * palette.length) | 0];
+      rockets.push({ x, y, z, vx, vy, targetY, life: 0, color, trail: [] });
+    }
+    function burst(x, y, z, baseColor) {
+      const count = Math.floor(70 + Math.random() * 60);
+      const spread = 2.2 + Math.random() * 1.8;
+      for (let i = 0; i < count; i++) {
+        const ang = Math.random() * Math.PI * 2;
+        const mag = (Math.random() ** 0.45) * spread * dpr * (0.55 + 0.75 * z);
+        const col = (Math.random() < 0.7) ? baseColor : palette[(Math.random() * palette.length) | 0];
+        particles.push({
+          x, y, z,
+          vx: Math.cos(ang) * mag,
+          vy: Math.sin(ang) * mag,
+          drag: 0.985 - Math.random() * 0.01,
+          g: (0.045 + Math.random() * 0.035) * dpr,
+          life: 0,
+          maxLife: (42 + Math.random() * 28) * (0.9 + 0.6 * z),
+          r: (1.1 + Math.random() * 1.8) * dpr * (0.75 + 0.85 * z),
+          col,
+          sparkle: Math.random() < 0.16,
+          trail: [],
+        });
+      }
+      smokes.push({
+        x, y, z,
+        r: (22 + Math.random() * 18) * dpr * (0.7 + 0.8 * z),
+        a: 0.14,
+        life: 0,
+        maxLife: 56 + Math.random() * 30
+      });
+    }
+    function celebrationBurst() {
+      for (let i = 0; i < 6; i++) {
+        setTimeout(() => {
+          const x = (0.15 + Math.random() * 0.7) * w;
+          const y = (0.12 + Math.random() * 0.45) * h;
+          const z = 0.55 + Math.random() * 0.45;
+          burst(x, y, z, palette[(Math.random() * palette.length) | 0]);
+        }, i * 170);
+      }
+    }
+    function puffAtCenter() {
+      const x = w * 0.5 + (Math.random() * 2 - 1) * 18 * dpr;
+      const y = h * 0.5 + 60 * dpr;
+      smokes.push({
+        x, y, z: 0.65,
+        r: 26 * dpr,
+        a: 0.18,
+        life: 0,
+        maxLife: 70
+      });
+    }
+    function drawStars(t) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'source-over';
+      for (const s of stars) {
+        const tw = 0.55 + 0.45 * Math.sin(s.tw + t * 0.001 * s.tws);
+        const alpha = s.a * tw;
+        ctx.beginPath();
+        ctx.fillStyle = `rgba(220,230,255,${alpha})`;
+        ctx.arc(s.x, s.y, s.r * (0.85 + 0.35 * s.z), 0, Math.PI * 2);
+        ctx.fill();
+        if (tw > 0.92 && s.z > 0.7) {
+          ctx.globalAlpha = alpha * 0.55;
+          ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+          ctx.lineWidth = 0.8 * dpr;
+          ctx.beginPath();
+          ctx.moveTo(s.x - 3.2 * dpr, s.y);
+          ctx.lineTo(s.x + 3.2 * dpr, s.y);
+          ctx.moveTo(s.x, s.y - 3.2 * dpr);
+          ctx.lineTo(s.x, s.y + 3.2 * dpr);
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
+      }
+      ctx.restore();
+    }
+    function tick(t) {
+      const dt = clamp((t - last) / 16.6667, 0.2, 2.2);
+      last = t;
+      ctx.save();
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.fillStyle = `rgba(5, 3, 12, ${0.18})`;
+      ctx.fillRect(0, 0, w, h);
+      ctx.restore();
+      drawStars(t);
+      spawnAcc += dt * (0.015 + 0.055 * intensity);
+      while (spawnAcc > 1) {
+        spawnAcc -= 1;
+        if (intensity > 0.08) launchRocket();
+      }
+      // Rockets
+      for (let i = rockets.length - 1; i >= 0; i--) {
+        const r = rockets[i];
+        r.life += dt;
+        r.trail.push({ x: r.x, y: r.y });
+        if (r.trail.length > 14) r.trail.shift();
+        r.x += r.vx * dt;
+        r.y += r.vy * dt;
+        r.vx *= 0.995;
+        r.vy *= 0.998;
+        r.vx += Math.sin((t * 0.001) + r.life) * 0.01 * dpr;
+        const reached = r.y <= r.targetY;
+        const timed = r.life > 70;
+        if (reached || timed) {
+          burst(r.x, r.y, r.z, r.color);
+          rockets.splice(i, 1);
+        }
+      }
+      // Particles
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.life += dt;
+        p.trail.push({ x: p.x, y: p.y });
+        if (p.trail.length > 10) p.trail.shift();
+        p.vx *= p.drag;
+        p.vy *= p.drag;
+        p.vy += p.g * dt;
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        if (p.life > p.maxLife) {
+          particles.splice(i, 1);
+        }
+      }
+      // Smokes
+      for (let i = smokes.length - 1; i >= 0; i--) {
+        const s = smokes[i];
+        s.life += dt;
+        if (s.life > s.maxLife) {
+          smokes.splice(i, 1);
+        }
+      }
+      // Draw (additive)
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      for (const r of rockets) {
+        for (let i = 0; i < r.trail.length - 1; i++) {
+          const a = i / r.trail.length;
+          ctx.strokeStyle = `rgba(${r.color.r},${r.color.g},${r.color.b},${0.08 + a * 0.14})`;
+          ctx.lineWidth = (1.2 + a * 1.8) * dpr * (0.7 + 0.8 * r.z);
+          ctx.beginPath();
+          ctx.moveTo(r.trail[i].x, r.trail[i].y);
+          ctx.lineTo(r.trail[i + 1].x, r.trail[i + 1].y);
+          ctx.stroke();
+        }
+        const glow = 10 * dpr * (0.7 + 0.9 * r.z);
+        const g = ctx.createRadialGradient(r.x, r.y, 0, r.x, r.y, glow);
+        g.addColorStop(0, `rgba(${r.color.r},${r.color.g},${r.color.b},0.60)`);
+        g.addColorStop(1, `rgba(${r.color.r},${r.color.g},${r.color.b},0.00)`);
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(r.x, r.y, glow, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      for (const p of particles) {
+        const life01 = clamp(p.life / p.maxLife, 0, 1);
+        const fade = 1 - life01;
+        for (let i = 0; i < p.trail.length - 1; i++) {
+          const a = i / p.trail.length;
+          const alpha = (0.06 + a * 0.10) * fade;
+          ctx.strokeStyle = `rgba(${p.col.r},${p.col.g},${p.col.b},${alpha})`;
+          ctx.lineWidth = (0.8 + a * 1.2) * dpr * (0.65 + 0.9 * p.z);
+          ctx.beginPath();
+          ctx.moveTo(p.trail[i].x, p.trail[i].y);
+          ctx.lineTo(p.trail[i + 1].x, p.trail[i + 1].y);
+          ctx.stroke();
+        }
+        const flick = p.sparkle ? (0.65 + 0.35 * Math.sin((t * 0.02) + p.life)) : 1.0;
+        const alpha = (0.22 + 0.45 * fade) * flick;
+        ctx.fillStyle = `rgba(${p.col.r},${p.col.g},${p.col.b},${alpha})`;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r * (0.7 + 0.6 * fade), 0, Math.PI * 2);
+        ctx.fill();
+        const glowR = p.r * (3.2 + 3.2 * fade);
+        const gg = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, glowR);
+        gg.addColorStop(0, `rgba(${p.col.r},${p.col.g},${p.col.b},${0.16 * fade})`);
+        gg.addColorStop(1, `rgba(${p.col.r},${p.col.g},${p.col.b},0)`);
+        ctx.fillStyle = gg;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, glowR, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      for (const s of smokes) {
+        const life01 = clamp(s.life / s.maxLife, 0, 1);
+        const fade = 1 - life01;
+        const radius = s.r * (0.7 + 1.25 * life01);
+        const g = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, radius);
+        g.addColorStop(0, `rgba(220,220,255,${s.a * fade})`);
+        g.addColorStop(1, `rgba(220,220,255,0)`);
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+      // Mic sampling in candle scene
+      if (sceneIndex === 3 && !candleOut) {
+        sampleMicAndDetectBlow(t);
+      }
+      requestAnimationFrame(tick);
+    }
+    return { resize, tick, setIntensity, puffAtCenter, celebrationBurst };
+  })();
+  // Boot
+  function boot() {
+    fx.resize();
+    ctx.fillStyle = 'rgba(5, 3, 12, 1)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    requestAnimationFrame(fx.tick);
+  }
+  window.addEventListener('resize', () => fx.resize(), { passive: true });
+  setScene(0);
+  boot();
+})();

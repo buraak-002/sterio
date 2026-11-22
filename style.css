@@ -568,7 +568,7 @@ body{
   opacity:1;
   transform: translateX(-50%) translateY(-14%) scale(1);
 }
-/* Scene 5 — cinema credits + eternal sky finale (FINAL: full-top scroll, bigger, dreamy) */
+/* Scene 5 — cinema credits + eternal sky finale */
 .credits-wrapper{
   height: 88vh;
   overflow: hidden;
@@ -629,7 +629,6 @@ body{
   margin: 0;
   color: var(--ink-dim);
 }
-/* Nickname blocks — movie-star style, glowing */
 .credits-starname{
   font-family: var(--font-head);
   font-weight: 600;

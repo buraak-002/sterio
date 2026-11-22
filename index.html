@@ -1,3 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0616" />
+  <title>Happy Birthday Nimra</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Caveat:wght@500;600;700&family=Montserrat:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <!-- Fixed background canvas (stars + fireworks). Never intercepts clicks. -->
+  <canvas id="fxCanvas" aria-hidden="true"></canvas>
+  <!-- Floating gifts layer -->
+  <div id="giftLayer" aria-hidden="true"></div>
+
+  <main id="app" class="app" aria-live="polite">
+
+    <!-- Scene 0 : Welcome (Audio Unlock) -->
+    <section class="scene active" data-scene="0" aria-label="Start">
+      <div class="content">
+        <p class="top-tag">November 23 &nbsp;•&nbsp; 9:00 PM</p>
+        <h1 class="title">Happy Birthday Nimra <span class="inline-emoji" aria-hidden="true">✨</span></h1>
+        <p class="subtitle">It's 9 PM — the hour that always belonged to us.<br>Ready for your birthday surprise?</p>
+        <button class="btn primary" id="startBtn" type="button">
+          Begin <span class="inline-emoji" aria-hidden="true">🎁</span>
+        </button>
+        <p class="microhint">Tip: enable sound for the full experience.</p>
+      </div>
+    </section>
+
+    <!-- Scene 1 : The Memories -->
+    <section class="scene" data-scene="1" aria-label="Memories">
+      <div class="content">
+        <h2 class="headline">Some nights never really ended</h2>
+        <div class="memory-stack" aria-label="Memories">
+          <p class="memory" data-step="1">From the sixth of June to the twenty-seventh of November <span aria-hidden="true">🌌</span></p>
+          <p class="memory" data-step="2">Every 9 PM conversation that turned into a star <span aria-hidden="true">💫</span></p>
+          <p class="memory" data-step="3">Distance changed nothing — you still shine in my sky <span aria-hidden="true">🤍</span></p>
+        </div>
+        <button class="btn primary" id="memoriesNextBtn" type="button">
+          Next <span aria-hidden="true">→</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- Scene 2 : The Dreamer's Planet (Saturn Card) -->
+    <section class="scene" data-scene="2" aria-label="The Dreamer's Planet">
+      <div class="content">
+        <h2 class="headline">The Dreamer's Planet <span class="inline-emoji" aria-hidden="true">🪐</span></h2>
+        <p class="subtitle dim"><em>“Of all the planets, she loved the one with rings.”</em></p>
+
+        <!-- Real CSS Saturn -->
+        <div class="saturn-wrap" aria-hidden="true">
+          <div class="saturn">
+            <div class="saturn-rings"></div>
+            <div class="saturn-body"></div>
+          </div>
+        </div>
+
+        <div class="quote-stack" aria-label="Quiet sentences">
+          <p class="quote-card" data-step="1">“Some stars go quiet — but their light keeps traveling through the dark.”</p>
+          <p class="quote-card" data-step="2">“The sky never really loses a star. It only learns to love her from farther away.”</p>
+          <p class="quote-card" data-step="3">“No expectations, no noise. You were, and always will be, my favorite 9 PM.”</p>
+        </div>
+        <button class="btn primary" id="saturnNextBtn" type="button">
+          Make a Wish <span class="inline-emoji" aria-hidden="true">🎂</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- Scene 3 : Birthday Cake & Candle -->
+    <section class="scene" data-scene="3" aria-label="Cake and candle">
+      <div class="content">
+        <h2 class="headline">November 23</h2>
+        <p class="subtitle dim">Close your eyes, make a wish,<br>and blow out the candle (or tap the flame).</p>
+        <div class="cake-stage" role="group" aria-label="Birthday cake interaction">
+          <div class="cake" aria-hidden="true">
+            <div class="cake-top"></div>
+            <div class="cake-body"></div>
+            <div class="cake-shadow"></div>
+            <div class="candle" id="candle" aria-hidden="true">
+              <div class="wick"></div>
+              <div class="flame" id="flame" aria-hidden="true"></div>
+              <div class="candle-body"></div>
+            </div>
+          </div>
+        </div>
+        <button class="btn ghost" id="continueBtn" type="button" disabled>
+          Read Your Letter <span aria-hidden="true">💌</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- Scene 4 : The 3D Letter -->
+    <section class="scene" data-scene="4" aria-label="Envelope and letter">
+      <div class="content">
+        <div class="envelope-stage">
+          <button class="envelope" id="envelope" type="button" aria-label="Open the letter">
+            <span class="env-back" aria-hidden="true"></span>
+            <span class="env-front" aria-hidden="true"></span>
+            <span class="env-flap" aria-hidden="true"></span>
+            <span class="env-seal" aria-hidden="true"></span>
+            <span class="letter" id="letter" aria-hidden="true">
+              <span class="letter-inner">
+                <span class="letter-title">Dear Nimra,</span>
+                <span class="letter-body">
+                  <span class="line">Some stories never really end — they just learn to live quietly among the stars.</span>
+                  <span class="line">From the sixth of June, every 9 PM became a small universe. And even now, when the clock touches nine, the sky still feels like it's waiting for something familiar.</span>
+                  <span class="line">Tonight asks nothing of you — no expectations, no noise. Just one quiet wish: that your birthday is as soft as your heart, and that this year is gentle with you in ways the last one wasn't.</span>
+                  <span class="line">You always loved the planet with rings. They say its rings are made of countless little moons that never left. Some things simply keep circling — silently, patiently, beautifully.</span>
+                  <span class="line">Happy Birthday, Nimra. Keep shining, dreamer. The sky was always yours.</span>
+                </span>
+                <span class="letter-sign">
+                  Yours, Ayaz <span aria-hidden="true">🪐</span><br>
+                  <small>(somewhere under the same sky)</small>
+                </span>
+              </span>
+            </span>
+          </button>
+          <p class="microhint dim">Tap the envelope to open.</p>
+        </div>
+        <button class="btn primary" id="creditsBtn" type="button">
+          Roll The Credits <span aria-hidden="true">✦</span>
+        </button>
+      </div>
+    </section>
+
     <!-- Scene 5 : Movie End Credits (Eternal Sky) -->
     <section class="scene" data-scene="5" aria-label="End credits">
       <div class="content credits-wrapper" id="creditsWrapper">
@@ -86,3 +216,12 @@
         Replay Sky <span aria-hidden="true">↺</span>
       </button>
     </section>
+
+  </main>
+
+  <!-- Background music (infinite loop) -->
+  <audio id="bgm" src="./moonlight.mp3" preload="auto" loop></audio>
+
+  <script src="./script.js"></script>
+</body>
+</html>

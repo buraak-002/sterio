@@ -207,7 +207,7 @@ body{
   opacity:1;
   transform: translateY(0px);
 }
-/* Scene 2 — CSS Saturn (real, dreamy, lilac/blue) */
+/* Scene 2 — CSS Saturn */
 .saturn-wrap{
   display:flex;
   justify-content:center;
@@ -568,15 +568,15 @@ body{
   opacity:1;
   transform: translateX(-50%) translateY(-14%) scale(1);
 }
-/* Scene 5 — cinema credits + eternal sky finale */
+/* Scene 5 — cinema credits + eternal sky finale (UPDATED: faster + bigger text) */
 .credits-wrapper{
   height: 88vh;
   overflow: hidden;
   position: relative;
   display: flex;
   justify-content: center;
-  -webkit-mask-image: linear-gradient(180deg, transparent, #000 12%, #000 88%, transparent);
-  mask-image: linear-gradient(180deg, transparent, #000 12%, #000 88%, transparent);
+  -webkit-mask-image: linear-gradient(180deg, transparent, #000 10%, #000 90%, transparent);
+  mask-image: linear-gradient(180deg, transparent, #000 10%, #000 90%, transparent);
   transition: opacity 1800ms ease;
 }
 .credits-wrapper.done{
@@ -586,73 +586,73 @@ body{
   display:flex;
   flex-direction:column;
   align-items:center;
-  gap: 34px;
+  gap: 30px;
   width: 100%;
-  padding-top: 85vh;
+  padding-top: 78vh;
   padding-bottom: 6vh;
   will-change: transform;
 }
 .credits-roll.roll{
-  animation: scrollCredits 40s linear forwards;
+  animation: scrollCredits 28s linear forwards;
 }
 @keyframes scrollCredits{
   0%{ transform: translateY(0); }
-  100%{ transform: translateY(calc(-100% + 32vh)); }
+  100%{ transform: translateY(calc(-100% + 24vh)); }
 }
 .credit-block{ text-align:center; }
 .credits-title{
   font-family: var(--font-head);
   font-weight: 600;
-  font-size: clamp(28px, 6vw, 44px);
+  font-size: clamp(30px, 7vw, 48px);
   margin: 0;
   color: var(--ink);
   text-shadow: 0 14px 60px rgba(0,0,0,0.6);
 }
 .credits-hero{
-  font-size: clamp(36px, 8vw, 56px);
+  font-size: clamp(40px, 9vw, 60px);
   letter-spacing: 0.12em;
 }
 .credits-label{
   display:block;
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.22em;
+  letter-spacing: 0.24em;
   text-transform: uppercase;
   color: var(--muted);
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 .credits-val{
   font-family: var(--font-body);
   font-weight: 500;
-  font-size: clamp(19px, 4.4vw, 25px);
+  font-size: clamp(22px, 5.2vw, 30px);
   margin: 0;
   color: var(--ink-dim);
 }
 .credit-quote{
   font-family: var(--font-body);
   font-style: italic;
-  font-size: clamp(19px, 4.6vw, 25px);
+  font-size: clamp(22px, 5.2vw, 29px);
   line-height: 1.5;
-  max-width: 480px;
+  max-width: 500px;
   text-align: center;
-  margin: 14px 0 4px;
+  margin: 16px 0 4px;
   color: rgba(255,255,255,0.94);
 }
 .credit-quote p{ margin:0; }
 .credit-final{
-  margin-top: 10px;
+  margin-top: 8px;
 }
 .credits-director{
   font-family: var(--font-head);
   font-weight: 600;
-  font-size: clamp(24px, 5.4vw, 36px);
+  font-size: clamp(28px, 6.5vw, 42px);
   letter-spacing: 0.06em;
   margin: 0;
   color: var(--ink);
   text-shadow: 0 14px 60px rgba(0,0,0,0.6);
 }
-/* Finale: quiet line appears over the eternal sky, then fades away */
+/* Finale: quiet line over the eternal sky */
 .sky-finale{
   position:absolute;
   inset:0;
